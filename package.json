@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
+    "postbuild": "node scripts/assetsignore.mjs",
     "preview": "astro build && wrangler pages dev ./dist",
     "importer": "node --env-file=.env scripts/importer-produits.mjs",
     "astro": "astro"
