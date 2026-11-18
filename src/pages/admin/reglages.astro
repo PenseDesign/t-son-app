@@ -1,10 +1,12 @@
 ---
+// src/pages/admin/reglages.astro : REMPLACE entièrement l'ancien fichier
 import LayoutAdmin from "../../layouts/LayoutAdmin.astro";
 import Repeteur from "../../components/Repeteur.astro";
-import { texte, entier, lireRepeteur, messageErreur } from "../../lib/admin";
+import { texte, entier, lireRepeteur, messageErreur, CHEMIN_PHOTO } from "../../lib/admin";
+import { urlBasePhotos } from "../../lib/supabase";
 
 const supabase = Astro.locals.supabase;
-let b = Astro.locals.boutique;
+const b = Astro.locals.boutique;
 let erreur = "";
 
 if (Astro.request.method === "POST") {
@@ -20,6 +22,7 @@ if (Astro.request.method === "POST") {
       id: 1,
       nom: texte(f, "nom"),
       slogan: texte(f, "slogan"),
+      logo: CHEMIN_PHOTO.test(texte(f, "logo")) ? texte(f, "logo") : null,
       description: texte(f, "description"),
       couleur_marque: couleur("couleur_marque", b.couleurs.marque),
       couleur_marque_fonce: couleur("couleur_marque_fonce", b.couleurs.marqueFonce),
@@ -47,7 +50,7 @@ if (Astro.request.method === "POST") {
 
 <LayoutAdmin titre="Réglages">
   <h1 class="font-titre text-3xl font-extrabold">Réglages de la boutique</h1>
-  <p class="mt-2 text-encre/70">Tout ce qui s'affiche sur le site : coordonnées, horaires, livraison, questions fréquentes.</p>
+  <p class="mt-2 text-encre/70">Tout ce qui s'affiche sur le site : logo, coordonnées, horaires, livraison, questions fréquentes.</p>
 
   {Astro.url.searchParams.get("ok") && <p role="status" class="mt-4 rounded-lg bg-emerald-50 p-3 font-semibold text-emerald-800">Réglages enregistrés.</p>}
   {erreur && <p role="alert" class="mt-4 rounded-lg bg-red-50 p-3 font-semibold text-red-800">{erreur}</p>}
@@ -56,8 +59,29 @@ if (Astro.request.method === "POST") {
     <section class="carte space-y-4" aria-labelledby="r-identite">
       <h2 id="r-identite" class="font-titre text-xl font-bold">Identité</h2>
       <div class="grid gap-4 sm:grid-cols-2">
-        
-        
+
+        <!-- Logo -->
+        <div id="logo-zone" data-base={urlBasePhotos()} class="sm:col-span-2">
+          <label class="etiquette" for="logo-choix">Logo</label>
+          <div class="flex flex-wrap items-center gap-4">
+            <img
+              data-logo-apercu
+              src={b.logo ?? undefined}
+              alt="Logo actuel"
+              hidden={!b.logo}
+              class="h-20 max-w-[14rem] rounded-lg border border-encre/15 bg-white object-contain p-2"
+            />
+            <input type="hidden" name="logo" value={b.logoChemin} data-logo-valeur />
+            <label class="btn btn-clair">
+              Choisir un logo
+              <input id="logo-choix" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" data-logo-choix />
+            </label>
+            <button type="button" class="btn btn-danger" data-logo-retirer>Retirer le logo</button>
+          </div>
+          <p class="aide">Idéal : fond transparent (PNG), format horizontal, au moins 400 px de large. N'oubliez pas d'enregistrer ensuite.</p>
+          <p data-logo-etat role="status" class="mt-1 text-sm font-semibold"></p>
+        </div>
+
         <div>
           <label class="etiquette" for="nom">Nom de la boutique *</label>
           <input id="nom" name="nom" required value={b.nom} class="champ" />
@@ -183,3 +207,54 @@ if (Astro.request.method === "POST") {
     </div>
   </form>
 </LayoutAdmin>
+
+<script>
+  const zone = document.getElementById("logo-zone");
+  if (zone) {
+    const valeur = zone.querySelector<HTMLInputElement>("[data-logo-valeur]")!;
+    const apercu = zone.querySelector<HTMLImageElement>("[data-logo-apercu]")!;
+    const choix = zone.querySelector<HTMLInputElement>("[data-logo-choix]")!;
+    const etat = zone.querySelector<HTMLElement>("[data-logo-etat]")!;
+    const retirer = zone.querySelector<HTMLButtonElement>("[data-logo-retirer]")!;
+    const base = zone.dataset.base ?? "";
+
+    // Réduit à 800 px maximum en gardant la transparence (PNG)
+    async function preparer(fichier: File): Promise<Blob> {
+      const image = await createImageBitmap(fichier);
+      const ratio = Math.min(1, 800 / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * ratio);
+      canvas.height = Math.round(image.height * ratio);
+      canvas.getContext("2d")!.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return new Promise((ok, ko) =>
+        canvas.toBlob((b) => (b ? ok(b) : ko(new Error("compression"))), "image/png"),
+      );
+    }
+
+    choix.addEventListener("change", async () => {
+      const fichier = choix.files?.[0];
+      if (!fichier) return;
+      etat.textContent = "Envoi du logo…";
+      try {
+        const donnees = new FormData();
+        donnees.append("fichier", await preparer(fichier), "logo.png");
+        const reponse = await fetch("/admin/api/upload", { method: "POST", body: donnees });
+        const json = await reponse.json();
+        if (!reponse.ok) throw new Error(json.erreur ?? "Envoi impossible.");
+        valeur.value = json.chemin;
+        apercu.src = base + json.chemin;
+        apercu.hidden = false;
+        etat.textContent = "Logo envoyé. Cliquez sur « Enregistrer les réglages » en bas de la page.";
+      } catch (e) {
+        etat.textContent = e instanceof Error ? e.message : "Échec de l'envoi.";
+      }
+      choix.value = "";
+    });
+
+    retirer.addEventListener("click", () => {
+      valeur.value = "";
+      apercu.hidden = true;
+      etat.textContent = "Logo retiré. Cliquez sur « Enregistrer les réglages » en bas de la page.";
+    });
+  }
+</script>

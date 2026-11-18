@@ -1,11 +1,16 @@
+// src/lib/reglages.ts : REMPLACE entièrement l'ancien fichier
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { boutiqueParDefaut, type CategorieConfig, type ModeLivraison } from "../config/shopConfig";
+import { urlPhoto } from "./supabase";
 
 export interface Boutique {
   nom: string;
   slogan: string;
+  /** URL complète du logo, ou null s'il n'y en a pas */
+  logo: string | null;
+  /** Chemin du logo dans le stockage (utilisé par le formulaire des réglages) */
+  logoChemin: string;
   description: string;
-  logo?: string;
   couleurs: { marque: string; marqueFonce: string; accent: string };
   whatsapp: { numero: string; numeroAffiche: string; messageAccueil: string };
   email: string;
@@ -19,6 +24,8 @@ export interface Boutique {
 }
 
 const COULEUR = /^#[0-9a-fA-F]{6}$/;
+const CHEMIN_LOGO = /^[A-Za-z0-9_\-/]+\.(jpg|jpeg|png|webp)$/;
+
 const couleur = (v: unknown, defaut: string) => (typeof v === "string" && COULEUR.test(v) ? v : defaut);
 const liste = <T>(v: unknown, defaut: T[]): T[] => (Array.isArray(v) ? (v as T[]) : defaut);
 
@@ -34,9 +41,15 @@ export async function chargerReglages(db: SupabaseClient): Promise<Boutique> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const l: Record<string, any> = reglages.data ?? {};
+
+  // Le logo n'est accepté que s'il a la forme d'un chemin de photo valide
+  const logoChemin = typeof l.logo === "string" && CHEMIN_LOGO.test(l.logo) ? l.logo : "";
+
   return {
     nom: l.nom ?? d.nom,
     slogan: l.slogan ?? d.slogan,
+    logoChemin,
+    logo: logoChemin ? urlPhoto(logoChemin) : null,
     description: l.description ?? d.description,
     couleurs: {
       marque: couleur(l.couleur_marque, d.couleurs.marque),

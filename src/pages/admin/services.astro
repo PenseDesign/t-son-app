@@ -1,0 +1,191 @@
+---
+import LayoutAdmin from "../../layouts/LayoutAdmin.astro";
+import { texte, entier, messageErreur } from "../../lib/admin";
+import {
+  APPAREILS,
+  MODES_PRIX,
+  versService,
+  libellePrix,
+  type Service,
+  type SectionService,
+} from "../../lib/services";
+
+const supabase = Astro.locals.supabase;
+const sectionActive: SectionService = Astro.url.searchParams.get("section") === "logiciels" ? "logiciels" : "maintenance";
+let erreur = "";
+
+function lire(f: FormData) {
+  const section: SectionService = texte(f, "section") === "logiciels" ? "logiciels" : "maintenance";
+  const appareil = texte(f, "appareil") in APPAREILS ? texte(f, "appareil") : "tous";
+  const mode = texte(f, "prix_mode") in MODES_PRIX ? texte(f, "prix_mode") : "fixe";
+  const prixSaisi = texte(f, "prix");
+  return {
+    section,
+    appareil,
+    prix_mode: mode,
+    prix: mode === "sur-devis" || prixSaisi === "" ? null : Math.max(0, entier(f, "prix")),
+    type: texte(f, "type"),
+    nom: texte(f, "nom"),
+    description: texte(f, "description"),
+    duree: texte(f, "duree"),
+    ordre: entier(f, "ordre"),
+    visible: f.get("visible") === "on",
+  };
+}
+
+if (Astro.request.method === "POST") {
+  const f = await Astro.request.formData();
+  const action = texte(f, "action");
+  const id = texte(f, "id");
+  const ligne = lire(f);
+  const retour = `/admin/services?section=${ligne.section}&ok=1`;
+
+  if (action === "supprimer") {
+    const { error } = await supabase.from("services").delete().eq("id", id);
+    if (error) erreur = messageErreur(error);
+    else return Astro.redirect(retour);
+  } else if (action === "masquer" || action === "afficher") {
+    const { error } = await supabase.from("services").update({ visible: action === "afficher" }).eq("id", id);
+    if (error) erreur = messageErreur(error);
+    else return Astro.redirect(retour);
+  } else if (action === "ajouter" || action === "enregistrer") {
+    if (!ligne.nom) erreur = "Le nom du service est obligatoire.";
+    else if (ligne.prix_mode !== "sur-devis" && ligne.prix === null)
+      erreur = "Indiquez un prix, ou choisissez « Sur devis ».";
+    else {
+      const { error } =
+        action === "ajouter"
+          ? await supabase.from("services").insert(ligne)
+          : await supabase.from("services").update(ligne).eq("id", id);
+      if (error) erreur = messageErreur(error);
+      else return Astro.redirect(retour);
+    }
+  }
+}
+
+const { data } = await supabase
+  .from("services")
+  .select("*")
+  .eq("section", sectionActive)
+  .order("ordre")
+  .order("nom");
+const services: Service[] = (data ?? []).map(versService);
+const lignes: (Service | null)[] = [null, ...services]; // null = formulaire d'ajout
+
+const suggestions =
+  sectionActive === "maintenance"
+    ? ["Software", "Hardware"]
+    : ["Installation de logiciels", "Transfert et sauvegarde de fichiers", "Configuration"];
+const onglets = [
+  { cle: "maintenance", libelle: "Maintenance informatique" },
+  { cle: "logiciels", libelle: "Logiciels et médias" },
+];
+---
+
+<LayoutAdmin titre="Services">
+  <h1 class="font-titre text-3xl font-extrabold">Services et tarifs</h1>
+  <p class="mt-2 text-encre/70">Ajoutez vos prestations et leurs prix. Elles s'affichent sur les pages « Maintenance » et « Logiciels et médias » du site.</p>
+
+  <nav class="mt-5 flex flex-wrap gap-2" aria-label="Rubrique">
+    {
+      onglets.map((o) => (
+        <a
+          href={`/admin/services?section=${o.cle}`}
+          aria-current={sectionActive === o.cle ? "true" : undefined}
+          class="rounded-full border border-encre/15 bg-white px-5 py-2 font-bold aria-[current=true]:border-marque aria-[current=true]:bg-marque aria-[current=true]:text-white"
+        >
+          {o.libelle}
+        </a>
+      ))
+    }
+  </nav>
+
+  {Astro.url.searchParams.get("ok") && <p role="status" class="mt-4 rounded-lg bg-emerald-50 p-3 font-semibold text-emerald-800">Modification enregistrée.</p>}
+  {erreur && <p role="alert" class="mt-4 rounded-lg bg-red-50 p-3 font-semibold text-red-800">{erreur}</p>}
+
+  <datalist id="types">{suggestions.map((t) => <option value={t} />)}</datalist>
+
+  <div class="mt-6 space-y-4">
+    {
+      lignes.map((s) => (
+        <details open={!s} class="carte">
+          <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 font-titre text-lg font-bold [&::-webkit-details-marker]:hidden">
+            {s ? (
+              <>
+                <span>{s.nom}</span>
+                <span class="text-sm font-semibold text-encre/70">
+                  {libellePrix(s)} · {APPAREILS[s.appareil]}{!s.visible && " · Masqué"}
+                </span>
+              </>
+            ) : (
+              <span class="text-marque">+ Ajouter un service</span>
+            )}
+          </summary>
+
+          <form method="post" class="mt-4 grid gap-4 sm:grid-cols-2">
+            <input type="hidden" name="section" value={sectionActive} />
+            {s && <input type="hidden" name="id" value={s.id} />}
+
+            <div class="sm:col-span-2">
+              <label class="etiquette">Nom du service *</label>
+              <input name="nom" required value={s?.nom ?? ""} class="champ" placeholder="Remplacement d'écran, Installation de Windows…" />
+            </div>
+            <div>
+              <label class="etiquette">Catégorie d'affichage</label>
+              <input name="type" list="types" value={s?.type ?? ""} class="champ" placeholder="Software, Hardware…" />
+            </div>
+            <div>
+              <label class="etiquette">Appareil concerné</label>
+              <select name="appareil" class="champ">
+                {Object.entries(APPAREILS).map(([cle, libelle]) => <option value={cle} selected={(s?.appareil ?? "tous") === cle}>{libelle}</option>)}
+              </select>
+            </div>
+            <div>
+              <label class="etiquette">Type de prix</label>
+              <select name="prix_mode" class="champ">
+                {Object.entries(MODES_PRIX).map(([cle, libelle]) => <option value={cle} selected={(s?.prixMode ?? "fixe") === cle}>{libelle}</option>)}
+              </select>
+            </div>
+            <div>
+              <label class="etiquette">Prix (FCFA)</label>
+              <input name="prix" inputmode="numeric" value={s?.prix ?? ""} class="champ" placeholder="15000" />
+              <p class="aide">Laissez vide si « Sur devis ».</p>
+            </div>
+            <div>
+              <label class="etiquette">Durée (facultatif)</label>
+              <input name="duree" value={s?.duree ?? ""} class="champ" placeholder="1 heure, 24 h…" />
+            </div>
+            <div>
+              <label class="etiquette">Ordre d'affichage</label>
+              <input name="ordre" inputmode="numeric" value={s?.ordre ?? 0} class="champ" />
+              <p class="aide">Le plus petit numéro s'affiche en premier.</p>
+            </div>
+            <div class="sm:col-span-2">
+              <label class="etiquette">Description (facultatif)</label>
+              <textarea name="description" rows="2" class="champ">{s?.description ?? ""}</textarea>
+            </div>
+            <label class="flex items-center gap-3 font-bold sm:col-span-2">
+              <input type="checkbox" name="visible" checked={s?.visible ?? true} class="h-5 w-5" /> Afficher sur le site
+            </label>
+
+            <div class="flex flex-wrap gap-2 sm:col-span-2">
+              {s ? (
+                <>
+                  <button name="action" value="enregistrer" class="btn btn-marque">Enregistrer</button>
+                  <button name="action" value={s.visible ? "masquer" : "afficher"} class="btn btn-clair" formnovalidate>
+                    {s.visible ? "Masquer" : "Afficher"}
+                  </button>
+                  <button name="action" value="supprimer" class="btn btn-danger ml-auto" formnovalidate onclick="return confirm('Supprimer ce service ?')">
+                    Supprimer
+                  </button>
+                </>
+              ) : (
+                <button name="action" value="ajouter" class="btn btn-marque">Ajouter ce service</button>
+              )}
+            </div>
+          </form>
+        </details>
+      ))
+    }
+  </div>
+</LayoutAdmin>

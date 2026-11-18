@@ -1,0 +1,110 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BoutonWhatsApp from "./BoutonWhatsApp.astro";
+import { lienWhatsApp } from "../lib/produits";
+import {
+  chargerServices,
+  libellePrix,
+  messageService,
+  APPAREILS,
+  type SectionService,
+  type AppareilService,
+  type Service,
+} from "../lib/services";
+
+interface Props {
+  section: SectionService;
+  titre: string;
+  introduction: string;
+}
+const { section, titre, introduction } = Astro.props;
+
+const boutique = Astro.locals.boutique;
+const tous = await chargerServices(Astro.locals.db, section);
+
+const brut = Astro.url.searchParams.get("appareil");
+const filtre: AppareilService | "" = brut === "telephone" || brut === "ordinateur" ? brut : "";
+const liste = tous.filter((s) => !filtre || s.appareil === "tous" || s.appareil === filtre);
+
+const groupes = new Map<string, Service[]>();
+for (const s of liste) {
+  const cle = s.type || "Autres services";
+  groupes.set(cle, [...(groupes.get(cle) ?? []), s]);
+}
+
+const urlPage = Astro.url.origin + Astro.url.pathname;
+const lienGeneral = lienWhatsApp(
+  `Bonjour ${boutique.nom}, j'ai une question sur vos services (${titre.toLowerCase()}).`,
+  boutique.whatsapp.numero,
+);
+const onglets = [
+  { cle: "", libelle: "Tout" },
+  { cle: "telephone", libelle: "Téléphone" },
+  { cle: "ordinateur", libelle: "Ordinateur" },
+];
+---
+
+<Layout titre={titre} description={introduction}>
+  <section class="bg-marque text-white">
+    <div class="mx-auto max-w-6xl px-4 py-12 md:py-16">
+      <h1 class="font-titre text-4xl font-extrabold tracking-tight md:text-5xl">{titre}</h1>
+      <p class="mt-4 max-w-2xl text-lg text-white/85">{introduction}</p>
+      <div class="mt-6 max-w-sm">
+        <BoutonWhatsApp href={lienGeneral} libelle="Poser une question" />
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-4 py-8">
+    <nav class="flex flex-wrap gap-2" aria-label="Filtrer par appareil">
+      {
+        onglets.map((o) => (
+          <a
+            href={o.cle ? `?appareil=${o.cle}` : Astro.url.pathname}
+            aria-current={filtre === o.cle ? "true" : undefined}
+            class="rounded-full border border-encre/15 bg-white px-5 py-2 font-bold transition-colors hover:border-marque aria-[current=true]:border-accent aria-[current=true]:bg-accent aria-[current=true]:text-encre"
+          >
+            {o.libelle}
+          </a>
+        ))
+      }
+    </nav>
+
+    {
+      groupes.size === 0 && (
+        <p class="mt-8 rounded-2xl border border-encre/10 bg-white p-6 text-lg text-encre/80">
+          Les tarifs de cette rubrique arrivent bientôt. Écrivez-nous sur WhatsApp pour un devis.
+        </p>
+      )
+    }
+
+    {
+      [...groupes.entries()].map(([type, services]) => (
+        <div class="mt-10">
+          <h2 class="border-l-8 border-accent pl-4 font-titre text-2xl font-extrabold">{type}</h2>
+          <ul class="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {services.map((s) => (
+              <li class="flex flex-col rounded-2xl border border-encre/10 bg-white p-5">
+                <p class="text-sm font-bold text-marque">{APPAREILS[s.appareil]}</p>
+                <h3 class="mt-1 font-titre text-xl font-bold leading-snug">{s.nom}</h3>
+                {s.description && <p class="mt-2 text-encre/75">{s.description}</p>}
+                {s.duree && <p class="mt-2 text-sm text-encre/60">Durée : {s.duree}</p>}
+                <p class="mt-auto pt-4 font-titre text-2xl font-extrabold text-marque">{libellePrix(s)}</p>
+                <div class="mt-3">
+                  <BoutonWhatsApp
+                    href={lienWhatsApp(messageService(s, boutique.nom, urlPage), boutique.whatsapp.numero)}
+                    libelle="Demander ce service"
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+
+    <p class="mt-10 text-sm text-encre/60">
+      Les tarifs sont indicatifs et peuvent varier selon l'état de l'appareil. Le prix final est confirmé avant toute intervention.
+    </p>
+  </section>
+</Layout>

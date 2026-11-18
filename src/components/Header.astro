@@ -8,6 +8,8 @@ const { pathname } = Astro.url;
 const liens = [
   { href: "/", libelle: "Accueil" },
   { href: "/boutique", libelle: "Boutique" },
+  { href: "/maintenance", libelle: "Maintenance" },
+  { href: "/logiciels", libelle: "Logiciels et médias" },
   { href: "/contact", libelle: "Contact" },
 ];
 const actif = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
@@ -18,7 +20,7 @@ const initiale = boutique.nom.trim().charAt(0).toUpperCase();
 ---
 
 <!-- Barre d'information (défile avec la page) -->
-<div class="bg-encre text-sm text-white">
+<div class="bg-marque-fonce text-sm text-white">
   <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-2">
     <p class="hidden truncate text-white/80 sm:block">
       {boutique.adresse.ville}{premierHoraire ? ` · ${premierHoraire.jours} : ${premierHoraire.heures}` : ""}
@@ -36,7 +38,7 @@ const initiale = boutique.nom.trim().charAt(0).toUpperCase();
 
 <!-- Barre principale (reste visible en haut de l'écran) -->
 <header class="sticky top-0 z-40 border-b-4 border-accent bg-white shadow-sm">
-  <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:py-4">
+  <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 lg:py-4">
     <a href="/" class="flex min-w-0 items-center gap-3" aria-label={`${boutique.nom}, retour à l'accueil`}>
       {
         boutique.logo ? (
@@ -45,21 +47,21 @@ const initiale = boutique.nom.trim().charAt(0).toUpperCase();
             alt=""
             width="200"
             height="80"
-            class="h-12 w-auto max-w-[10rem] object-contain md:h-16 md:max-w-[14rem]"
+            class="h-12 w-auto max-w-[10rem] object-contain lg:h-16 lg:max-w-[14rem]"
           />
         ) : (
           <span
             aria-hidden="true"
-            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-marque font-titre text-2xl font-extrabold text-white md:h-14 md:w-14"
+            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-marque font-titre text-2xl font-extrabold text-white lg:h-14 lg:w-14"
           >
             {initiale}
           </span>
         )
       }
-      <!-- Avec un logo, le nom est masqué sur mobile pour gagner de la place. Supprimez "hidden sm:block" pour toujours l'afficher. -->
+      <!-- Avec un logo, le nom est masqué sur mobile. Supprimez "hidden sm:block" pour toujours l'afficher. -->
       <span
         class:list={[
-          "truncate font-titre text-xl font-extrabold leading-tight tracking-tight text-marque md:text-3xl",
+          "truncate font-titre text-xl font-extrabold leading-tight tracking-tight text-marque lg:text-2xl",
           boutique.logo && "hidden sm:block",
         ]}
       >
@@ -68,14 +70,14 @@ const initiale = boutique.nom.trim().charAt(0).toUpperCase();
     </a>
 
     <!-- Navigation ordinateur -->
-    <nav class="hidden items-center gap-8 md:flex" aria-label="Navigation principale">
+    <nav class="hidden items-center gap-6 lg:flex" aria-label="Navigation principale">
       {
         liens.map((l) => (
           <a
             href={l.href}
             aria-current={actif(l.href) ? "page" : undefined}
             class:list={[
-              "border-b-4 py-1 text-lg font-bold transition-colors",
+              "border-b-4 py-1 text-base font-bold transition-colors",
               actif(l.href)
                 ? "border-accent text-marque"
                 : "border-transparent text-encre/70 hover:text-marque",
@@ -89,14 +91,14 @@ const initiale = boutique.nom.trim().charAt(0).toUpperCase();
         href={lienWa}
         target="_blank"
         rel="noopener noreferrer"
-        class="rounded-xl bg-whatsapp px-6 py-3 text-lg font-bold text-white shadow-md transition-colors hover:bg-whatsapp-fonce"
+        class="rounded-xl bg-whatsapp px-5 py-3 text-base font-bold text-white shadow-md transition-colors hover:bg-whatsapp-fonce"
       >
-        Commander sur WhatsApp
+        WhatsApp
       </a>
     </nav>
 
-    <!-- Menu mobile -->
-    <details class="relative md:hidden">
+    <!-- Menu mobile et tablette -->
+    <details class="relative lg:hidden">
       <summary
         aria-label="Ouvrir le menu"
         class="flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-xl border-2 border-marque text-marque [&::-webkit-details-marker]:hidden"
